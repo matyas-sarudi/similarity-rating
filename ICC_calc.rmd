@@ -1,0 +1,143 @@
+---
+title: "ICC_calc.rmd"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(reticulate)
+library(psych)
+```
+
+```{r}
+processed <- read.csv("all_ratings.csv")
+processed <- select(processed, -X)
+
+# calculate mean human rating score for each image pair
+processed$human_ratings <- (processed$YA_average_ratings + processed$OA_average_ratings) / 2
+
+raw_ratings <- read.csv("individual_ratings_for_ICC.csv")
+```
+
+
+
+Generally speaking, the ICC determines the reliability of ratings by comparing the variability of different ratings of the same individuals to the total variation across all ratings and all individuals.
+
+A high ICC (close to 1) indicates high similarity between values from the same group.
+A low ICC (ICC close to zero) means that values from the same group are not similar
+
+Due to the large number of pairs, we cannot let each rater rate all pairs. Therefore, our experimental design suits ICC(1,k): each pair is rated by a different set of randomly selected raters, and the result is based on the average of these k raters.
+
+## # #report# # ##
+The intra-class correlation coefficient was computed to assess the agreement between three doctors in rating the anxiety levels in 20 individuals. There was a poor absolute agreement between the three doctors, using the two-way random effect models and “single rater” unit, kappa = 0.2, p = 0.056.
+## # # # # # # ##
+
+```{r}
+# ICC Yab
+raw_ratings %>% 
+select(ya1.1,ya1.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+```{r}
+# ICC Yac
+raw_ratings %>% 
+select(ya2.1,ya2.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+
+```{r}
+# ICC Ybc
+raw_ratings %>% 
+select(ya3.1,ya3.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+```{r}
+# ICC Oab
+raw_ratings %>% 
+select(oa1.1,oa1.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+```{r}
+# ICC Oac
+raw_ratings %>% 
+select(oa2.1,oa2.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+
+```{r}
+# ICC Obc
+raw_ratings %>% 
+select(oa3.1,oa3.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+```{r}
+# ICC YOab
+raw_ratings %>% 
+select(ya1.1,ya1.2,oa1.1,oa1.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+```{r}
+# ICC YOac
+raw_ratings %>% 
+select(ya2.1,ya2.2,oa2.1,oa2.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+```{r}
+# ICC YOcb
+raw_ratings %>% 
+select(ya3.1,ya3.2,oa3.1,oa3.2) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+```
+
+```{r}
+head(processed)
+```
+
+
+```{r}
+#ICC human raters and pixel based scores
+processed %>% 
+select(RGB, human_ratings) %>% 
+filter(.[1] != -1,
+       .[2] != -1) %>% 
+ICC()
+
+```
+
+
+```{r}
+#correlate human & pixel based ratings
+cor(as.numeric(processed$human_ratings), as.numeric(processed$RGB), method = "pearson")
+
+shapiro_test(processed, human_ratings)
+
+hist(processed$human_ratings)
+
+res2 <- cor.test(processed$RGB, processed$MSE,  method = "spearman")
+res2
+```
+

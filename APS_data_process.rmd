@@ -1,0 +1,373 @@
+---
+title: "APS_data_process"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(tibble)
+
+```
+
+```{r}
+# read all participants' APS data
+APS_list = lapply(list.files(path = "data/APS", pattern="*.csv", full.names = T), 
+                   read.csv) 
+
+# read the table containing bin created based on human and computer ratings
+bins <- read.csv("data/rating_bins.csv")
+
+```
+
+
+## functions that will iterate through the list of all partcipants APS data
+
+```{r}
+tidy_f <- function(x){
+ 
+  x <- 
+    x %>%
+    select(TrialType, #Lure / Target / Foil --> Lure + Object Trial
+         StimType,
+         CurrentImage, #BM
+         rec_trial_key.keys,
+         EncodingStimType, #EX   ERP / OLP / LLP --> ERP
+         EncodingImage) %>%  #EY
+     
+  # drop location trials, filter for trials that are either foils or
+  # what were exact repeats during the encoding phase
+  filter(TrialType == "OBJ",
+         EncodingStimType == "ERP" | EncodingStimType == "FOIL",
+         StimType != "TARGET")
+  
+  # create new col with img nr
+  x$image <- str_sub(x$CurrentImage,18,-6)
+  
+  
+  # create new col with img codes (->>   "a b" , "b a" , a c" ... "b c")
+  x$ImgPair <- paste(str_sub(x$CurrentImage, -5,-5),
+                    str_sub(x$EncodingImage,-5,-5))
+  
+  # ->> "ab" , "ac" , "bc" 
+  x <- 
+    x %>% 
+    mutate(abc = ifelse(ImgPair == "a b" | ImgPair == "b a", "ab", 
+                        ifelse(ImgPair == "a c" | ImgPair == "c a", "ac",
+                           ifelse(ImgPair == "b c" | ImgPair == "c b", "bc",
+                                  ImgPair))))
+  
+  # drop excess cols
+  x_tidy <- 
+  x %>%
+  select(image,
+         abc,
+         EncodingStimType,
+         StimType,
+         rec_trial_key.keys) %>% 
+    
+  mutate(rec_trial_key.keys = ifelse(rec_trial_key.keys == "f", "new", "old"))
+
+  colnames(x_tidy)[5] <- "response"
+  
+  
+  x_tidy
+}
+```
+
+
+# attach the different kinds of bins to each trial 
+```{r}
+tidy_f2 <- function(x){
+  
+  
+  
+    # add foils trials 
+  foils <- 
+    x %>% 
+      filter(StimType == "FOIL") 
+
+  # read the csv containing similarity bins based on human ratings, RGB scores & MSE scores
+  allratings <- read.csv("data/rating_bins.csv")
+  
+  # prepare the APS table and the rating_bin table for merge
+  allratings$abc <- as.factor(allratings$abc)
+  allratings$image <- as.factor(allratings$image)
+  arrange(allratings, image)
+  x$image <- as.integer(x$image)
+  
+
+  x <- merge(x,allratings,by=c("image","abc"))
+  
+
+  
+  foils$image <- as.integer(foils$image)
+  all <- bind_rows(x, foils)
+  
+  all <- select(all, -X)
+  
+  # replace NAs with "foil" in the 3 different similarity bin cols
+  all[is.na(all)] <- "foil"
+  
+  all
+}
+```
+
+
+
+
+
+
+
+```{r}
+
+tidy_f3 <- function(x){
+# create a support df that will be binded to the summary table of the response ratios
+# it is necessary for adding a "0" if there is not "new" bin in a bin
+supp <- data.frame(c("new"), c(0), c(0), c(0))
+colnames(supp) <- c("response","n","N","prop")
+supp$n <- as.integer(supp$n)
+supp$N <- as.integer(supp$N)
+
+# create an empty vector to which the ratio of "new" responses will be appended
+# of each bin type (foil,high,medium,low) of each comparison method (human, RGB, MSE)
+vec <- numeric(0)
+
+
+
+# calculating the ratio of "new" responses in each scenario 
+
+###human ratings
+temp <- 
+  x %>% 
+  filter(average_human_rating == "high") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(average_human_rating == "medium") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(average_human_rating == "low") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(average_human_rating == "foil") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+###MSE ratings
+temp <- 
+  x %>% 
+  filter(MSE == "high") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(MSE == "medium") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(MSE == "low") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(MSE == "foil") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+  
+
+###RGB ratings
+temp <- 
+  x %>% 
+  filter(RGB == "high") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(RGB == "medium") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(RGB == "low") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+#
+temp <- 
+  x %>% 
+  filter(RGB == "foil") %>% 
+  group_by(response) %>% 
+  summarise(n = n()) %>% 
+  mutate(N = sum(n),
+            prop = round(n/N*100)) %>% 
+  filter(response == "new") %>% 
+  rbind(supp)
+
+vec <- append(vec, temp$prop[[1]])
+
+
+
+
+new_response_ratios <<- rbind(new_response_ratios, vec)
+colnames(new_response_ratios) <<- c("human_H", "human_M", "human_L", "human_F",
+                                   "MSE_H", "MSE_M", "MSE_L", "MSE_F",
+                                   "RGB_H", "RGB_M", "RGB_L", "RGB_F")
+
+
+}
+```
+
+
+
+
+
+
+
+```{r}
+
+# create an empty df to which each participants "new" response ratios
+# will be added row by row (by the tidy_f3 function)
+new_response_ratios <- data.frame(matrix(ncol = 12, nrow = 0))
+colnames(new_response_ratios) <- c("human_H", "human_M", "human_L", "human_F",
+                                   "MSE_H", "MSE_M", "MSE_L", "MSE_F",
+                                   "RGB_H", "RGB_M", "RGB_L", "RGB_F")
+
+```
+
+
+# apply functions to each APS df 
+# -> fill the rows of new_response_ratios table with participants' "new" response ratios in different bins 
+```{r}
+APS_list <- map(APS_list, tidy_f)
+APS_list <- map(APS_list, tidy_f2)
+APS_list <- map(APS_list, tidy_f3)
+```
+
+
+
+# add participant nr & age to the df
+```{r}
+nr <- 1:17
+age_group <- c("OA","OA","OA","OA",
+               "YA","YA","YA","YA",
+               "YA","YA","YA","YA",
+               "YA","YA","YA","YA",
+               "YA")
+age <- c(NA, NA, NA, NA,
+         23,21,23,21,23,22,24,20,41,23,20,24,19)
+
+sex <- c(NA, NA, NA, NA,
+         "female","female","female","female","female",
+         "female","male","female","male",
+         "female","female","female","female")
+
+
+new_response_ratios <- add_column(new_response_ratios, nr, .before = "human_H")
+
+new_response_ratios <- add_column(new_response_ratios, age_group, .before = "human_H")
+
+new_response_ratios <- add_column(new_response_ratios, age, .before = "human_H")
+
+new_response_ratios <- add_column(new_response_ratios, sex, .before = "human_H")
+
+```
+
+
+# exclude participant 6 beacuse their ratio of "new" responses in all foil bins was 0
+```{r}
+new_response_ratios = new_response_ratios[-6,]
+```
+
+# export data 
+```{r}
+write.csv(new_response_ratios, "data/new_response_ratios.csv")
+```
+
+

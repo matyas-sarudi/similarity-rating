@@ -1,0 +1,309 @@
+---
+title: "ANOVA_analysis"
+output: html_document
+---
+
+# load packages
+```{r}
+library(tidyverse)
+library(stringr)
+library(rstatix)
+library(ggpubr)
+```
+
+# import data
+```{r}
+dfs <- read.csv("data/new_response_ratios.csv")
+```
+
+
+# create distinct dfs containing the bins based on the different kinds of ratings
+```{r}
+human <- 
+  dfs %>% 
+  select(nr,
+         age_group, 
+         6:9) 
+
+
+MSE <- 
+  dfs %>% 
+  select(nr,
+         age_group, 
+         10:13)
+
+
+
+RGB <- 
+  dfs %>% 
+  select(nr,
+         age_group, 
+         14:17)
+
+
+```
+
+
+# define functions to excecute ANOVE analysis and plot the results
+```{r}
+ANOV <- function(df) {
+  
+  colnames(df) <- c("id","age_group","High","Medium","Low","Foil")
+  
+  df <- gather(df,"bin","new_response_ratio", 3:6)
+  
+  
+  bxp <- ggboxplot(df, 
+                 x = "bin", 
+                 xlab = "Similarity bin",
+                 y = "new_response_ratio", 
+                 ylab  = 'Ratio of „new” responses (%)',
+                 add = "point")
+  
+  
+  normality <- 
+  df %>%
+  group_by(bin) %>%
+  shapiro_test(new_response_ratio)
+  
+  
+  res.aov <- 
+  anova_test(data = df, 
+             dv = new_response_ratio, 
+             wid = id, 
+             within = bin)
+
+  anova_table <- res.aov[[1]]
+  mauchly_table <- res.aov[[2]]
+
+  
+  bonferroni <- 
+    df %>%
+    pairwise_t_test(new_response_ratio ~ bin, 
+                    paired = TRUE,
+                    p.adjust.method = "bonferroni")
+
+  
+  
+  # Visualization: box plots with p-values
+    pwc <- 
+      bonferroni %>%
+      add_xy_position(x = "bin")
+      bxp + 
+      stat_pvalue_manual(pwc) +
+      labs(
+        subtitle = get_test_label(res.aov, detailed = TRUE),
+        caption = get_pwc_label(pwc)
+      )
+  
+  df
+  print(normality)
+  print(anova_table)
+  print(mauchly_table)
+  print(bonferroni)
+  show(pwc)
+  
+}
+
+
+
+# function visualize ANOVA results in a boxplot
+ANOV_p <- function(df) {
+  
+  colnames(df) <- c("id","age_group","High","Medium","Low","Foil")
+  
+  df <- gather(df,"bin","new_response_ratio", 3:6)
+  
+  
+  bxp <- ggboxplot(df, 
+                 x = "bin", 
+                 xlab = "Similarity bin",
+                 y = "new_response_ratio", 
+                 ylab  = 'Ratio of „new” responses (%)',
+                 add = "point")
+  
+  
+  normality <- 
+  df %>%
+  group_by(bin) %>%
+  shapiro_test(new_response_ratio)
+  
+  
+  res.aov <- 
+  anova_test(data = df, 
+             dv = new_response_ratio, 
+             wid = id, 
+             within = bin)
+
+  anova_table <- get_anova_table(res.aov)
+  
+  
+  
+  bonferroni <- 
+    df %>%
+    pairwise_t_test(new_response_ratio ~ bin, 
+                    paired = TRUE,
+                    p.adjust.method = "bonferroni")
+
+  
+  
+  # Visualization: box plots with p-values
+    pwc <- 
+      bonferroni %>%
+      add_xy_position(x = "bin")
+      bxp + 
+      stat_pvalue_manual(pwc) +
+      labs(
+        subtitle = get_test_label(res.aov, detailed = TRUE),
+        caption = get_pwc_label(pwc)
+      )
+  
+}
+```
+
+
+
+
+# compare the ratio of "new" responses in the different similarity bins based on human ratings
+```{r}
+ANOV(human)
+```
+
+```{r}
+ANOV_p(human)
+```
+
+
+# compare the ratio of "new" responses in the different similarity bins based on MSE scores
+```{r}
+ANOV(MSE)
+```
+
+```{r}
+ANOV_p(MSE)
+```
+
+
+
+
+# compare the ratio of "new" responses in the different similarity bins based on RGB comparison scores
+```{r}
+ANOV(RGB)
+```
+
+```{r}
+ANOV_p(RGB)
+```
+
+
+
+
+
+# 2 way ANOVA to test whether there is an interaction with age group
+
+```{r}
+ANOV2 <- function(x) {
+  
+  colnames(x) <- c("id","age_group","High","Medium","Low","Foil")
+  
+  x <- gather(x,"bin","new_response_ratio", 3:6)
+  
+  x <- convert_as_factor(x, id, age_group, bin)
+  x$bin<-factor(x$bin, c("High", "Medium", "Low", "Foil"))
+
+
+  
+#WORKS
+model1 <- lm(new_response_ratio ~ bin * age_group, data = x)
+Anova(model1,type="III")
+
+res.aov3 <- aov(new_response_ratio ~ bin * age_group, data = x)
+
+
+
+summary(res.aov3)
+
+
+}
+
+
+
+
+ANOV2_plots <- function(x) {
+  
+  colnames(x) <- c("id","age_group","High","Medium","Low","Foil")
+  
+  x <- gather(x,"bin","new_response_ratio", 3:6)
+  
+  x <- convert_as_factor(x, id, age_group, bin)
+  x$bin<-factor(x$bin, c("High", "Medium", "Low", "Foil"))
+
+
+  
+#WORKS
+model1 <- lm(new_response_ratio ~ bin * age_group, data = x)
+Anova(model1,type="III")
+plot(model1,2)
+
+
+res.aov3 <- aov(new_response_ratio ~ bin * age_group, data = x)
+
+
+  
+  bxp <- 
+    ggboxplot(x, 
+              x = "bin", 
+              y = "new_response_ratio",
+              color = "age_group", 
+              palette = "jco",
+              ylab = 'Ratio of "new" responses',
+              xlab = "Similarity bin")
+  bxp
+
+  
+summary(res.aov3)
+bxp
+
+}
+```
+
+
+```{r}
+ANOV2(human)
+```
+
+```{r}
+ANOV2_plots(human)
+```
+
+
+```{r}
+ANOV2(RGB)
+```
+
+```{r}
+ANOV2_plots(RGB)
+```
+
+
+```{r}
+ANOV2(MSE)
+```
+
+```{r}
+ANOV2_plots(MSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

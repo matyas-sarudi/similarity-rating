@@ -1,0 +1,396 @@
+---
+title: "human_similarity_ratings"
+output: html_document
+---
+
+# Load packages
+```{r}
+library(tidyverse)
+library(reticulate)
+library(psych)
+```
+
+# Read YA data
+```{r}
+ya1.1 <- read.table("data/human_ratings/1.1.txt")
+ya1.2 <- read.table("data/human_ratings/1.2.txt")
+
+ya2.1 <- read.table("data/human_ratings/2.1.txt")
+ya2.2 <- read.table("data/human_ratings/2.2.txt")
+
+ya3.1 <- read.table("data/human_ratings/3.1.txt")
+ya3.2 <- read.table("data/human_ratings/3.2.txt")
+```
+
+
+# Read OA data
+```{r}
+oa1.1 <- read.table("data/human_ratings/1.1_o.txt")
+oa1.2 <- read.table("data/human_ratings/1.2_o.txt")
+
+oa2.1 <- read.table("data/human_ratings/2.1_o.txt")
+oa2.2 <- read.table("data/human_ratings/2.2_o.txt")
+
+oa3.1 <- read.table("data/human_ratings/3.1_o.txt")
+oa3.2 <- read.table("data/human_ratings/3.2_o.txt")
+```
+
+
+# create a list containing all YAs' data
+```{r}
+ya_data <- list(ya1.1, ya1.2, ya2.1, ya2.2, ya3.1, ya3.2)
+names(ya_data) <- c("ya1.1", "ya1.2","ya2.1", "ya2.2", "ya3.1", "ya3.2")
+```
+
+
+# create a list containing all OAs' data
+```{r}
+oa_data <- list(oa1.1, oa1.2, oa2.1, oa2.2, oa3.1, oa3.2)
+names(oa_data) <- c("oa1.1", "oa1.2","oa2.1", "oa2.2", "oa3.1", "oa3.2")
+```
+
+
+# define a function that arranges the data
+```{r}
+tidy_f <- function(x) {
+x <- data.frame(x)
+
+colnames(x) <- c("image","group","rating","RT","same")
+
+# remove practice trials: 1st 20 rows
+x <- slice(x, -(1:20))
+
+# remove the trials with the same images 
+x <- filter(x, same == 0)
+
+x <- arrange(x, image)
+x
+}
+```
+
+
+# tidy all participants' data
+```{r}
+ya_data <- map(ya_data, tidy_f)
+
+oa_data <- map(oa_data, tidy_f)
+```
+
+
+
+
+# create a df containing each participant's rating scores
+```{r}
+individual_ratings <- data.frame(c(1:181),
+                              ya_data$ya1.1[3],
+                              ya_data$ya1.2[3],
+                              ya_data$ya2.1[3], 
+                              ya_data$ya2.2[3],
+                              ya_data$ya3.1[3], 
+                              ya_data$ya3.2[3],
+                              
+                              oa_data$oa1.1[3],
+                              oa_data$oa1.2[3],
+                              oa_data$oa2.1[3], 
+                              oa_data$oa2.2[3],
+                              oa_data$oa3.1[3], 
+                              oa_data$oa3.2[3])
+
+colnames(individual_ratings) <- c("image",
+                               "ya1.1",
+                              "ya1.2",
+                              "ya2.1", 
+                              "ya2.2",
+                              "ya3.1", 
+                              "ya3.2",
+                              
+                              "oa1.1",
+                              "oa1.2",
+                              "oa2.1", 
+                              "oa2.2",
+                              "oa3.1", 
+                              "oa3.2")
+
+
+write.csv(individual_ratings, "individual_ratings_for_ICC.csv")
+```
+
+
+
+# calculate the average of ratings of each image pair
+```{r}
+average_ratings <- 
+  individ_ratings %>% 
+  mutate(ya1.mean = ifelse(ya1.1 == -1, ya1.2, 
+                        ifelse(ya1.2 == -1, ya1.1, 
+                               (ya1.1+ya1.2)/2))) %>% 
+  
+  mutate(ya2.mean = ifelse(ya2.1 == -1, ya2.2, 
+                        ifelse(ya2.2 == -1, ya2.1, 
+                               (ya2.1+ya2.2)/2))) %>% 
+  
+  mutate(ya3.mean= ifelse(ya3.1 == -1, ya3.2, 
+                        ifelse(ya3.2 == -1, ya3.1, 
+                               (ya1.1+ya3.2)/2))) %>% 
+
+
+  mutate(oa1.mean = ifelse(oa1.1 == -1, oa1.2, 
+                        ifelse(oa1.2 == -1, oa1.1, 
+                               (oa1.1+oa1.2)/2))) %>% 
+  
+  mutate(oa2.mean = ifelse(oa2.1 == -1, oa2.2, 
+                        ifelse(oa2.2 == -1, oa2.1, 
+                               (oa2.1+oa2.2)/2))) %>% 
+  
+  mutate(oa3.mean = ifelse(oa3.1 == -1, oa3.2, 
+                        ifelse(oa3.2 == -1, oa3.1, 
+                               (oa1.1+oa3.2)/2)))
+
+
+```
+
+
+
+
+# histograms of the rating distributions
+```{r}
+ggplot(average_ratings, aes(factor(ya1.mean))) +
+  geom_bar()
+
+ggsave("ya_group1_mean_ratings.png")
+
+ggplot(average_ratings, aes(factor(ya2.mean))) +
+  geom_bar()
+
+ggsave("ya_group2_mean_ratings.png")
+
+ggplot(average_ratings, aes(factor(ya3.mean))) +
+  geom_bar()
+
+ggsave("ya_group3_mean_ratings.png")
+
+
+ggplot(average_ratings, aes(factor(oa1.mean))) +
+  geom_bar()
+
+ggsave("oa_group1_mean_ratings.png")
+
+ggplot(average_ratings, aes(factor(oa2.mean))) +
+  geom_bar()
+
+ggsave("oa_group2_mean_ratings.png")
+
+ggplot(average_ratings, aes(factor(oa3.mean))) +
+  geom_bar()
+
+ggsave("oa_group3_mean_ratings.png")
+
+```
+
+# calculate the average of the ratings of OAs and YAs
+```{r}
+average_ratings <- 
+  average_ratings %>% 
+  mutate(group1.mean = (ya1.mean+oa1.mean)/2,
+         group2.mean = (ya2.mean+oa2.mean)/2,
+         group3.mean = (ya3.mean+oa3.mean)/2)
+```
+
+
+# creating lure bins for ab ac and bc image pairs
+
+```{r}
+rating_bins <- 
+  average_ratings %>% 
+  mutate(ab = cut(group1.mean,3,labels = c("low","medium","high"))) %>% 
+ 
+  mutate(ac = cut(group2.mean,3,labels = c("low","medium","high"))) %>% 
+  
+  mutate(bc = cut(group3.mean,3,labels = c("low","medium","high"))) 
+
+
+
+```
+
+
+# create a tidy df with similarity bins based on all human ratings
+```{r}
+rating_bins <- 
+  rating_bins %>% 
+  select(image, ab, ac, bc) %>% 
+  gather("abc","average_human_rating",ab:bc) %>% 
+  arrange(image)
+```
+
+# compare human ratings with pixel wise correlation
+
+1. read RGB_difference_score data
+2. read MSE data
+
+3. create a df with the following cols: 
+  - image number, human rating bins
+  
+4. create a 3rd col with the matching RGB values
+5. create a 4th col with the matching MSE values
+
+6. correlate the 2nd col with the 3rd and 4th
+
+```{r}
+RGB <- read.csv("data/RGB_diff_matrix.csv", row.names = 1, header= TRUE)
+
+MSE <- read.csv("data/MSE_matrix.csv",row.names = 1, header= TRUE)
+
+```
+
+```{r}
+
+# create a vector with the RGB comparison scores 
+# in the seq: 1a-1b, 1a-1c, 1b-1c, 2a-2b, ... , 181c-181b
+
+
+RGB_values = list()
+j = -1
+
+for (i in 1:181) {
+    
+    j = j + 1
+
+    RGB_values[j*3 + 1] = RGB[[i*2 + j]][[j*3+1]]
+    RGB_values[j*3 + 2] = RGB[[i*3]][[j*3+1]]
+    RGB_values[j*3 + 3] = RGB[[i*3]][[i*2 + j]]
+}
+
+RGB_values <- unlist(RGB_values)
+RGB_values <- as.factor(RGB_values)
+```
+
+# create similarity bins based on the RGB scores
+```{r}
+rating_bins$RGB_scores <- as.factor(RGB_values)
+rating_bins$RGB <- cut(as.numeric(rating_bins$RGB_scores),3,labels = c("low","medium","high"))
+```
+
+```{r}
+# create a vector with the MSE comparison scores 
+# in the seq: 1a-1b, 1a-1c, 1b-1c, 2a-2b, ... , 181c-181b
+
+
+MSE_values = list()
+j = -1
+
+for (i in 1:181) {
+    
+    j = j + 1
+
+    MSE_values[j*3 + 1] = MSE[[i*2 + j]][[j*3+1]]
+    MSE_values[j*3 + 2] = MSE[[i*3]][[j*3+1]]
+    MSE_values[j*3 + 3] = MSE[[i*3]][[i*2 + j]]
+}
+
+MSE_values <- unlist(MSE_values)
+MSE_values <- as.factor(MSE_values)
+```
+
+# create similarity bins based on the MSE scores
+```{r}
+rating_bins$MSE_scores  <- as.factor(MSE_values)
+rating_bins$MSE <- cut(as.numeric(rating_bins$MSE_scores),3,labels = c("low","medium","high"))
+```
+
+```{r}
+rating_bins <- select(rating_bins, -RGB_scores, -MSE_scores)
+```
+
+
+
+```{r}
+write.csv(rating_bins, "data/rating_bins.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# define a function that finds the vals from the EGB matrix
+
+find_value <- function(matrix, image_nr) {
+  
+  ab = matrix[[image_nr*2 + (image_nr-1)]][[(image_nr-1)*3+1]]
+  ac = matrix[[image_nr*3]][[(image_nr-1)*3+1]]
+  bc = matrix[[image_nr*3]][[image_nr*2 + (image_nr-1)]]
+  
+  c(ab,ac,bc) 
+  
+}
+
+
+
+find_value2 <- function(im1, im2) {
+  
+  a = RGB[[im1]][[im2]]
+  
+  a 
+  
+}
+```
+
+```{r}
+find_value(RGB,100)[3]
+```
+```{r}
+#find_value2('100a','X100a')
+RGB['X100a']
+
+
+cor(RGB['X3a'],MSE['X3a'])
+```
+
+```{r}
+j = 1
+i = 2
+
+
+a1 = i*2 + j
+a2 = j*3 + 1
+
+b1 = i*3
+b2 = j*3 + 1
+
+c1 = i*3
+c2 = i*2 + j
+
+print(a1)
+print(a2)
+print(b1)
+print(b2)
+print(c1)
+print(c2)
+```
+
+
+define a function that finds the vals from the EGB matrix
+
+find_value <- function(image_nr, first_letter, second_letter)
+
+
+```{r}
+write.csv(ratings, "data/ratings.csv")
+```
+
+
+  
